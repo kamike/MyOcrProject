@@ -28,13 +28,14 @@ class SQLUtils(object):
             return -1
 
     def addTableOcr(self, OcrBean):
-        sql = "insert into " + self.tbl_ocr + "(" + OcrBean.__getParaStr__() + ") values(" + OcrBean.__str__() + ")"
+        sql = "insert into " + self.tbl_ocr + "(" + OcrBean.__getParaStr__() + ") values(%s,%s,%s,%s,%s,%s)"
         print(sql)
         try:
-            self.cursor.execute(sql)
+            self.cursor.execute(sql, (OcrBean.content, OcrBean.file_id, OcrBean.key_word, OcrBean.type,
+                                      OcrBean.search_url, OcrBean.create_date))
             self.dataBases.commit()
             return int(self.cursor.lastrowid)
-        except:
+        except Exception as e:
             self.dataBases.rollback()
             print("exception====")
             return -1
@@ -44,7 +45,7 @@ class SQLUtils(object):
         self.cursor.close()
 
     def deleteFile(self, index):
-        sql="DELETE FROM tbl_file WHERE _id=\'"+index+"\'"
+        sql = "DELETE FROM tbl_file WHERE _id=" + index
         try:
             self.cursor.execute(sql)
             self.dataBases.commit()

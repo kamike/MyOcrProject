@@ -104,19 +104,18 @@ def downImg(imgUrl, dirpath, name):
         if str(res.status_code)[0] == "4":
             log.printLog("状态码不正确：" + str(res.status_code), ":", imgUrl)
             return -1
+        with open(filename, "wb") as f:
+            f.write(res.content)
+            f.close()
+        file = open(filename, "rb")
+        # 添加一条数据积累
+        fileBean = FileBean(imgUrl, name, dirpath, str(file.__sizeof__()),
+                            hashlib.md5(file.read()).hexdigest(),
+                            '0', '0', getFileNameEnd(imgUrl))
+        return utils.addTableFile(fileBean)
     except Exception as e:
         log.printLog("抛出异常：" + imgUrl + "," + e.__str__())
-        return -1
-    with open(filename, "wb") as f:
-        f.write(res.content)
-        f.close()
-
-    file = open(filename, "rb")
-    # 添加一条数据积累
-    fileBean = FileBean(imgUrl, name, dirpath, str(file.__sizeof__()),
-                        hashlib.md5(file.read()).hexdigest(),
-                        '0', '0', getFileNameEnd(imgUrl))
-    return utils.addTableFile(fileBean)
+    return -1
 
 
 def mkDir(dirName):
@@ -135,8 +134,11 @@ def startLoadImgs(word, imgDirpath):
     index = 0
     for url in urls:
         print("正在请求：", url)
-
-        html = requests.get(url, timeout=10).content.decode('utf-8')
+        try:
+            html = requests.get(url, timeout=10).content.decode('utf-8')
+        except Exception as ex:
+            print("图片解析utf-8异常")
+            return
         imgUrls = resolveImgUrl(html)
         if len(imgUrls) == 0:  # 没有图片则结束
             break
@@ -148,10 +150,17 @@ def startLoadImgs(word, imgDirpath):
                 log.printLog("已下载 %s 张" % index)
                 try:
                     content = baidu_ocr.decodeImgUrl(url)
-                    utils.addTableOcr(
-                        OcrBean(content['words_result'], index, word, 'baidu', search_url))
+                    # 把结果拼接成字符串 空格间隔
+                    resStr = ""
+                    for m in content['words_result']:
+                        resStr += m['words'] + ' '
+                    resStr = resStr.rstrip()
+
+                    ocrId = utils.addTableOcr(
+                        OcrBean(resStr, index, str(word), 'baidu', search_url))
+                    log.printLog("成功添加了一条记录：" + str(ocrId))
                 except Exception as e:
                     # 解析失败了
-                    utils.deleteFile(index)
-                    os.remove(fileName)
-                    log.printLog("解析失败了" + imgUrls)
+                    utils.deleteFile(str(index))
+                    os.remove(os.path.join(imgDirpath, fileName))
+                    log.printLog("解析失败了" + str(url))
