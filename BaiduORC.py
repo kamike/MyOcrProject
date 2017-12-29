@@ -5,6 +5,7 @@ import configparser
 
 from aip import AipOcr
 import json
+from utils.LogUtils import log
 
 
 # conf = configparser.ConfigParser()
@@ -18,7 +19,20 @@ import json
 class BaiduORC(object):
     def __init__(self):
         # self.imgUrl = "http://pursuege.oss-cn-shenzhen.aliyuncs.com/img/timg.jpg";
-        self.client = AipOcr("10506105", "l6xFr9MFZrj1I6XkObWf7jqN", "3iDMlsadAXqy5CIOGIjW2pnr4KrHEey3 ")
+        conf = configparser.ConfigParser()
+        file = os.getcwd() + "/Config.conf"
+        conf.read(file)
+        keyFile = conf.get('path', 'key_path')
+        self.keyArray = [['10506105', 'l6xFr9MFZrj1I6XkObWf7jqN', '3iDMlsadAXqy5CIOGIjW2pnr4KrHEey3']]
+        with open(keyFile, 'rb') as file:
+            for line in file.readlines():
+                if line.split():
+                    # 最后的可以列表
+                    self.keyArray.append(line.split())
+
+        self.keyIndex = 0
+        self.client = AipOcr(self.keyArray[self.keyIndex][0], self.keyArray[self.keyIndex][1],
+                             self.keyArray[self.keyIndex][2])
         # 定义参数变量
         self.options = {
             'detect_direction': 'true',
@@ -36,4 +50,13 @@ class BaiduORC(object):
         resoult = json.loads(jsonStr)
         return resoult
 
-baidu_ocr=BaiduORC()
+    def setNextKeySecret(self):
+        self.keyIndex += 1
+        if self.keyIndex >= len(self.keyArray):
+            self.keyIndex = 0
+        log.printLog("重置账号：" + str(self.keyIndex))
+        self.client = AipOcr(self.keyArray[self.keyIndex][0], self.keyArray[self.keyIndex][1],
+                             self.keyArray[self.keyIndex][2])
+
+
+baidu_ocr = BaiduORC()

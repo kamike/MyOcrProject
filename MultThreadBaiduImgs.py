@@ -3,11 +3,14 @@
 import hashlib
 import itertools
 import urllib
+
+import datetime
+import time
+
 import requests
 import os
 import re
 import sys
-from PIL import Image
 
 from sql.FileBean import FileBean
 from sql.OcrBean import OcrBean
@@ -129,6 +132,22 @@ def getFileNameEnd(url):
     return url[url.rindex('.'):len(url)]
 
 
+# 今天的次数用完了，到明天1点再运行
+def sleepToTomorrow():
+    start = datetime.datetime.now()
+    end = datetime.datetime(start.year, start.month, start.day)
+    sub = start - end
+    sleepTime = 25 * 3600 - sub.seconds
+    log.printLog("今天次数用完了，休息:" + str(sleepTime))
+    time.sleep(sleepTime)
+
+
+def checkErrorCode17(content):
+    if 'error_code' in content:
+        if ('17' == str(content.get('error_code'))):
+            return True
+
+
 def startLoadImgs(word, imgDirpath):
     urls = buildUrls(word)
     index = 0
@@ -147,20 +166,27 @@ def startLoadImgs(word, imgDirpath):
             fileName = str(index) + "__" + str(uuid.uuid1()) + getFileNameEnd(url)
             index = downImg(url, imgDirpath, fileName)
             if index >= 0:
-                log.printLog("已下载 %s 张" % index)
+                # log.printLog("已下载 %s 张" % index)
                 try:
                     content = baidu_ocr.decodeImgUrl(url)
-                    # 把结果拼接成字符串 空格间隔
-                    resStr = ""
-                    for m in content['words_result']:
-                        resStr += m['words'] + ' '
-                    resStr = resStr.rstrip()
 
-                    ocrId = utils.addTableOcr(
-                        OcrBean(resStr, index, str(word), 'baidu', search_url))
-                    log.printLog("成功添加了一条记录：" + str(ocrId))
-                except Exception as e:
-                    # 解析失败了
+                    if checkErrorCode17(content):
+                        # 重新设置key
+                        baidu_ocr.setNextKeySecret()
+                        if baidu_ocr.keyIndex == 0:
+                            log.printLog("所有的key都已经用完了......休息")
+                            sleepToTomorrow()
+
+                    # 把结果拼接成字符串 空格间隔
+                    if 'words_result' in content:
+                        resStr = ""
+                        for m in content['words_result']:
+                            resStr += m['words'] + ' '
+                        resStr = resStr.rstrip()
+                        ocrId = utils.addTableOcr(
+                            OcrBean(resStr, index, str(word), 'baidu', search_url))
+                        log.printLog("成功添加了一条记录：" + str(ocrId))
+                except Exception as e:  # 解析失败了
                     utils.deleteFile(str(index))
                     os.remove(os.path.join(imgDirpath, fileName))
                     log.printLog("解析失败了" + str(url))
